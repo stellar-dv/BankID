@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Info } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { ApiSession } from "@/lib/types";
-import { getQrCodeSvg } from "@/lib/bankidUtils";
+import QRCode from "qrcode";
 
 interface QrCodeProps {
   personalNumber: string;
@@ -23,21 +23,29 @@ export default function QrCode({
   onError
 }: QrCodeProps) {
   const [qrCodeData, setQrCodeData] = useState<string>("");
-  const [timeRemaining, setTimeRemaining] = useState<number>(120);
+  const [timeRemaining, setTimeRemaining] = useState<number>(30); // BankID QR codes refresh every 30s
+  const [session, setSession] = useState<ApiSession | null>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const qrTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   const initBankIdMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/bankid/init", {
-        personalNumber: personalNumber.trim() || undefined,
-        authMethod: "bankid-qr"
+      // Use the real BankID auth endpoint
+      const res = await apiRequest("POST", "/api/bankid/auth", {
+        personalNumber: personalNumber.trim() || undefined
       });
       return res.json();
     },
     onSuccess: (data) => {
       if (data.success) {
-        // In a real scenario, we would generate a QR code based on the BankID API response
-        // For now, we'll simulate it
-        setQrCodeData(getQrCodeSvg());
+        setSession(data);
+        onSessionCreated(data);
+        
+        // Generate initial QR code
+        generateQrCode(data);
+        
+        // Set up QR code refresh timer - BankID QR codes need to be refreshed
+        startQrCodeTimer(data);
       } else {
         onError(data.message || "Failed to initiate BankID");
       }
@@ -47,21 +55,69 @@ export default function QrCode({
     }
   });
 
-  useEffect(() => {
-    initBankIdMutation.mutate();
+  // Function to generate BankID QR code
+  const generateQrCode = async (sessionData: ApiSession) => {
+    try {
+      if (!sessionData.orderRef || !sessionData.qrStartToken || !sessionData.qrStartSecret) {
+        throw new Error("Missing QR code parameters");
+      }
+      
+      // Calculate QR code data using current timestamp (BankID algorithm)
+      const res = await apiRequest("POST", "/api/bankid/qrcode", {
+        orderRef: sessionData.orderRef,
+        qrStartToken: sessionData.qrStartToken,
+        qrStartSecret: sessionData.qrStartSecret
+      });
+      
+      const qrData = await res.json();
+      
+      if (qrData.success && qrData.qrAuthCode) {
+        // Generate QR code from auth code
+        const qrImage = await QRCode.toDataURL(qrData.qrAuthCode);
+        setQrCodeData(qrImage);
+      } else {
+        throw new Error("Failed to generate QR code");
+      }
+    } catch (error) {
+      console.error("QR code generation error:", error);
+      // Fallback to a simple QR code if generation fails
+      const fallbackQr = await QRCode.toDataURL("https://bankid.com");
+      setQrCodeData(fallbackQr);
+    }
+  };
+  
+  // Function to start timer for refreshing QR code
+  const startQrCodeTimer = (sessionData: ApiSession) => {
+    // Clear any existing timers
+    if (qrTimerRef.current) {
+      clearInterval(qrTimerRef.current);
+    }
     
-    // Start the timer
-    const timer = setInterval(() => {
+    // Reset time remaining
+    setTimeRemaining(30);
+    
+    // Start countdown
+    qrTimerRef.current = setInterval(() => {
       setTimeRemaining(prev => {
         if (prev <= 1) {
-          clearInterval(timer);
-          return 0;
+          // Time to refresh QR code
+          generateQrCode(sessionData);
+          return 30; // Reset timer
         }
         return prev - 1;
       });
     }, 1000);
+  };
+
+  useEffect(() => {
+    // Initialize BankID session
+    initBankIdMutation.mutate();
     
-    return () => clearInterval(timer);
+    // Cleanup timers on unmount
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (qrTimerRef.current) clearInterval(qrTimerRef.current);
+    };
   }, []);
   
   // Format time remaining as MM:SS
@@ -72,8 +128,13 @@ export default function QrCode({
   };
   
   const handleRefreshQrCode = () => {
-    setTimeRemaining(120);
-    initBankIdMutation.mutate();
+    if (session) {
+      setTimeRemaining(30);
+      generateQrCode(session);
+    } else {
+      // If we don't have a session yet, reinitialize
+      initBankIdMutation.mutate();
+    }
   };
 
   return (

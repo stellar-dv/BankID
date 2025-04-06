@@ -27,15 +27,25 @@ export default function Initiate({
 
   const initBankIdMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/bankid/init", {
-        personalNumber: personalNumber.trim() || undefined,
-        authMethod
+      // Use the real BankID auth endpoint
+      const res = await apiRequest("POST", "/api/bankid/auth", {
+        personalNumber: personalNumber.trim() || undefined
       });
       return res.json();
     },
     onSuccess: (data) => {
       if (data.success) {
+        // Pass the session with all BankID data
         onSessionCreated(data);
+        
+        // If this is a mobile device and we're using THIS_DEVICE method, launch BankID app
+        if (authMethod === 'bankid-app') {
+          // Launch BankID app with autoStartToken (in a real app)
+          if (data.autoStartToken) {
+            const launcher = `bankid:///?autostarttoken=${data.autoStartToken}&redirect=null`;
+            window.location.href = launcher;
+          }
+        }
       } else {
         onError(data.message || "Failed to initiate BankID");
       }
@@ -55,14 +65,18 @@ export default function Initiate({
       description: "Attempting to open BankID app...",
     });
 
-    // In a real implementation, this would open the BankID app
-    setTimeout(() => {
+    // Try to relaunch the BankID app if it didn't open automatically
+    if (initBankIdMutation.data?.autoStartToken) {
+      const launcher = `bankid:///?autostarttoken=${initBankIdMutation.data.autoStartToken}&redirect=null`;
+      window.location.href = launcher;
+    } else {
+      // Fallback if we don't have a token
       onSessionCreated({
         success: true,
         sessionId: "demo-session-id",
         message: "BankID session initiated"
       });
-    }, 1500);
+    }
   };
 
   return (

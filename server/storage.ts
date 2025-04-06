@@ -13,8 +13,11 @@ export interface IStorage {
   // BankID session methods
   createBankidSession(session: Omit<InsertBankidSession, "sessionId">): Promise<BankidSession>;
   getBankidSession(sessionId: string): Promise<BankidSession | undefined>;
+  getBankidSessionByOrderRef(orderRef: string): Promise<BankidSession | undefined>;
   updateBankidSessionStatus(sessionId: string, status: SessionStatus): Promise<BankidSession | undefined>;
+  updateBankidSessionStatusByOrderRef(orderRef: string, status: SessionStatus): Promise<BankidSession | undefined>;
   completeBankidSession(sessionId: string): Promise<BankidSession | undefined>;
+  completeBankidSessionByOrderRef(orderRef: string): Promise<BankidSession | undefined>;
 }
 
 export class MemStorage implements IStorage {
@@ -52,10 +55,17 @@ export class MemStorage implements IStorage {
     const sessionId = uuidv4();
     const now = new Date();
     
+    // Ensure all required fields have values (not undefined)
     const session: BankidSession = {
       id,
       sessionId,
-      ...sessionData,
+      personalNumber: sessionData.personalNumber || null,
+      authMethod: sessionData.authMethod,
+      status: sessionData.status,
+      orderRef: sessionData.orderRef || null,
+      autoStartToken: sessionData.autoStartToken || null,
+      qrStartToken: sessionData.qrStartToken || null,
+      qrStartSecret: sessionData.qrStartSecret || null,
       createdAt: now,
       completedAt: null
     };
@@ -68,12 +78,31 @@ export class MemStorage implements IStorage {
     return this.bankidSessions.get(sessionId);
   }
 
+  async getBankidSessionByOrderRef(orderRef: string): Promise<BankidSession | undefined> {
+    return Array.from(this.bankidSessions.values()).find(
+      (session) => session.orderRef === orderRef,
+    );
+  }
+
   async updateBankidSessionStatus(sessionId: string, status: SessionStatus): Promise<BankidSession | undefined> {
     const session = this.bankidSessions.get(sessionId);
     if (!session) return undefined;
     
     const updatedSession = { ...session, status };
     this.bankidSessions.set(sessionId, updatedSession);
+    
+    return updatedSession;
+  }
+
+  async updateBankidSessionStatusByOrderRef(orderRef: string, status: SessionStatus): Promise<BankidSession | undefined> {
+    const session = Array.from(this.bankidSessions.values()).find(
+      (session) => session.orderRef === orderRef,
+    );
+    
+    if (!session) return undefined;
+    
+    const updatedSession = { ...session, status };
+    this.bankidSessions.set(session.sessionId, updatedSession);
     
     return updatedSession;
   }
@@ -90,6 +119,25 @@ export class MemStorage implements IStorage {
     };
     
     this.bankidSessions.set(sessionId, updatedSession);
+    
+    return updatedSession;
+  }
+
+  async completeBankidSessionByOrderRef(orderRef: string): Promise<BankidSession | undefined> {
+    const session = Array.from(this.bankidSessions.values()).find(
+      (session) => session.orderRef === orderRef,
+    );
+    
+    if (!session) return undefined;
+    
+    const now = new Date();
+    const updatedSession = { 
+      ...session, 
+      status: SESSION_STATUS.COMPLETED as SessionStatus,
+      completedAt: now 
+    };
+    
+    this.bankidSessions.set(session.sessionId, updatedSession);
     
     return updatedSession;
   }

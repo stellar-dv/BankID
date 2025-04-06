@@ -14,6 +14,10 @@ export const bankidSessions = pgTable("bankid_sessions", {
   personalNumber: varchar("personal_number", { length: 13 }),
   authMethod: varchar("auth_method", { length: 20 }).notNull(),
   status: varchar("status", { length: 20 }).notNull(),
+  orderRef: varchar("order_ref", { length: 255 }),
+  autoStartToken: varchar("auto_start_token", { length: 255 }),
+  qrStartToken: varchar("qr_start_token", { length: 255 }),
+  qrStartSecret: varchar("qr_start_secret", { length: 255 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   completedAt: timestamp("completed_at"),
 });
@@ -28,6 +32,10 @@ export const insertBankidSessionSchema = createInsertSchema(bankidSessions).pick
   personalNumber: true,
   authMethod: true,
   status: true,
+  orderRef: true,
+  autoStartToken: true,
+  qrStartToken: true,
+  qrStartSecret: true,
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -55,3 +63,26 @@ export const SESSION_STATUS = {
 
 export type AuthMethod = typeof AUTH_METHODS[keyof typeof AUTH_METHODS];
 export type SessionStatus = typeof SESSION_STATUS[keyof typeof SESSION_STATUS];
+
+// BankID API Types
+export interface BankIDAuthRequest {
+  personalNumber?: string;
+  endUserIp: string;
+  requirement?: {
+    cardReader?: string;
+    certificatePolicies?: string[];
+    issuerCn?: string[];
+    autoStartTokenRequired?: boolean;
+    allowFingerprint?: boolean;
+  };
+}
+
+export interface BankIDCollectRequest {
+  orderRef: string;
+}
+
+export interface BankIDQRCodeRequest {
+  orderRef: string;
+  qrStartToken: string;
+  qrStartSecret: string;
+}

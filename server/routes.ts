@@ -8,12 +8,18 @@ import {
   AuthMethod,
   AUTH_METHODS
 } from "@shared/schema";
+import { 
+  handleBankidAuth, 
+  handleBankidCollect, 
+  handleBankidCancel, 
+  handleQrCode 
+} from "./bankid";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Create HTTP server
   const httpServer = createServer(app);
 
-  // BankID API routes
+  // BankID API routes - Old demo routes (keeping for compatibility)
   app.post("/api/bankid/init", async (req, res) => {
     try {
       const schema = z.object({
@@ -146,6 +152,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   });
+
+  // --- NEW REAL BANKID ROUTES ---
+  
+  // Auth with real BankID
+  app.post("/api/bankid/auth", handleBankidAuth);
+  
+  // Collect status from real BankID
+  app.post("/api/bankid/collect", handleBankidCollect);
+  
+  // Cancel BankID auth
+  app.post("/api/bankid/cancel", handleBankidCancel);
+  
+  // Generate QR code for BankID
+  app.post("/api/bankid/qrcode", handleQrCode);
 
   return httpServer;
 }
