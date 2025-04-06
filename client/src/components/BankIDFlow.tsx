@@ -24,6 +24,7 @@ export default function BankIDFlow() {
   const [personalNumber, setPersonalNumber] = useState("");
   const [authMethod, setAuthMethod] = useState<AuthMethod>("bankid-app");
   const [sessionData, setSessionData] = useState<ApiSession | null>(null);
+  const [activeOrderRef, setActiveOrderRef] = useState<string | undefined>(undefined);
   const { toast } = useToast();
 
   const navigateTo = (step: BankIDStep) => {
@@ -34,6 +35,7 @@ export default function BankIDFlow() {
     setCurrentStep("welcome");
     setPersonalNumber("");
     setSessionData(null);
+    setActiveOrderRef(undefined);
   };
 
   const updateSessionData = (data: Partial<ApiSession>) => {
@@ -82,6 +84,10 @@ export default function BankIDFlow() {
           onBack={() => navigateTo("identification")}
           onSessionCreated={(session) => {
             setSessionData(session);
+            // Store orderRef for real BankID API
+            if (session.orderRef) {
+              setActiveOrderRef(session.orderRef);
+            }
             navigateTo("authentication");
           }}
           onError={handleError}
@@ -94,6 +100,10 @@ export default function BankIDFlow() {
           onBack={() => navigateTo("identification")}
           onSessionCreated={(session) => {
             setSessionData(session);
+            // Store orderRef for real BankID API
+            if (session.orderRef) {
+              setActiveOrderRef(session.orderRef);
+            }
             navigateTo("authentication");
           }}
           onSkip={() => navigateTo("authentication")}
@@ -104,8 +114,15 @@ export default function BankIDFlow() {
       {currentStep === "authentication" && (
         <Authentication 
           sessionId={sessionData?.sessionId || ""}
+          orderRef={activeOrderRef}
           onCancel={() => navigateTo("identification")}
-          onSuccess={() => navigateTo("success")}
+          onSuccess={(orderRef) => {
+            // If a different orderRef is returned, update it
+            if (orderRef && orderRef !== activeOrderRef) {
+              setActiveOrderRef(orderRef);
+            }
+            navigateTo("success");
+          }}
           onError={() => navigateTo("error")}
           onSkipToSuccess={() => navigateTo("success")}
           onSkipToError={() => navigateTo("error")}
@@ -114,6 +131,8 @@ export default function BankIDFlow() {
       
       {currentStep === "success" && (
         <Success 
+          sessionId={sessionData?.sessionId}
+          orderRef={activeOrderRef}
           onContinue={() => {
             toast({
               title: "Success",

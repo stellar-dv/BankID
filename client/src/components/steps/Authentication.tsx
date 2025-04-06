@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -6,11 +6,13 @@ import { InfoIcon } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useMutation } from "@tanstack/react-query";
 import { SESSION_STATUS } from "@shared/schema";
+import { BankIDCollectResponse } from "@/lib/types";
 
 interface AuthenticationProps {
   sessionId: string;
+  orderRef?: string;
   onCancel: () => void;
-  onSuccess: () => void;
+  onSuccess: (orderRef?: string) => void;
   onError: () => void;
   onSkipToSuccess: () => void;
   onSkipToError: () => void;
@@ -18,6 +20,7 @@ interface AuthenticationProps {
 
 export default function Authentication({
   sessionId,
+  orderRef,
   onCancel,
   onSuccess,
   onError,
@@ -25,7 +28,10 @@ export default function Authentication({
   onSkipToError
 }: AuthenticationProps) {
   const [progress, setProgress] = useState(40);
+  const [statusPolling, setStatusPolling] = useState(true);
+  const pollingTimerRef = useRef<number | null>(null);
   
+  // Mutation for completing the auth for older implementation
   const completeAuthMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/bankid/complete", {
@@ -35,8 +41,42 @@ export default function Authentication({
     }
   });
 
+  // Mutation for collecting BankID status
+  const collectStatusMutation = useMutation({
+    mutationFn: async (): Promise<BankIDCollectResponse> => {
+      if (!orderRef) throw new Error("No orderRef provided");
+      
+      const res = await apiRequest("POST", "/api/bankid/collect", {
+        orderRef
+      });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      if (data.status === 'complete') {
+        setStatusPolling(false);
+        setProgress(100);
+        // Wait a moment before transitioning to success
+        setTimeout(() => {
+          onSuccess(orderRef);
+        }, 500);
+      } else if (data.status === 'failed') {
+        setStatusPolling(false);
+        onError();
+      } else {
+        // Continue polling if still pending
+        pollingTimerRef.current = window.setTimeout(() => {
+          collectStatusMutation.mutate();
+        }, 2000);
+      }
+    },
+    onError: () => {
+      onError();
+    }
+  });
+
+  // For backward compatibility - using progress bar
   useEffect(() => {
-    if (!sessionId) return;
+    if (!sessionId || orderRef) return;
 
     const interval = setInterval(() => {
       setProgress(prev => {
@@ -51,15 +91,30 @@ export default function Authentication({
     }, 300);
     
     return () => clearInterval(interval);
-  }, [sessionId]);
+  }, [sessionId, orderRef]);
 
+  // For real BankID collection
   useEffect(() => {
-    if (progress === 100) {
+    if (!orderRef || !statusPolling) return;
+    
+    // Start polling
+    collectStatusMutation.mutate();
+    
+    return () => {
+      if (pollingTimerRef.current) {
+        clearTimeout(pollingTimerRef.current);
+      }
+    };
+  }, [orderRef, statusPolling]);
+
+  // For backward compatibility
+  useEffect(() => {
+    if (progress === 100 && !orderRef) {
       setTimeout(() => {
         onSuccess();
       }, 500);
     }
-  }, [progress]);
+  }, [progress, orderRef]);
 
   return (
     <Card className="shadow-card transition-all step-animation">

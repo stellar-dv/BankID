@@ -1,15 +1,10 @@
 import { Request, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
-import axios from 'axios';
-import https from 'https';
 import fs from 'fs';
 import path from 'path';
+import { v4 as uuidv4 } from 'uuid';
+import * as bankid from 'bankid';
 import { storage } from './storage';
-import { 
-  BankIDAuthRequest, 
-  BankIDCollectRequest, 
-  AUTH_METHODS 
-} from '@shared/schema';
+import { AUTH_METHODS } from '@shared/schema';
 
 // BankID configuration - Use the test environment URL
 const BANKID_API_URL = 'https://appapi2.test.bankid.com/rp/v6.0';
@@ -17,34 +12,26 @@ const BANKID_CERT_PASSWORD = process.env.BANKID_CERT_PASSWORD || '';
 
 console.log("Connecting to BankID test API at:", BANKID_API_URL);
 
-// Read the P12 certificate file
+// Read the certificate files
 const P12_CERT_PATH = path.resolve('./attached_assets/FPTestcert5_20240610.p12');
-let P12_CERT;
+const PEM_CERT_PATH = path.resolve('./attached_assets/FPTestcert5_20240610.pem');
+
+// Initialize BankID client
+let bankidClient: bankid.BankIdClient;
 
 try {
-  P12_CERT = fs.readFileSync(P12_CERT_PATH);
-  console.log("BankID P12 certificate loaded successfully");
+  // Initialize BankID client with the certificate
+  bankidClient = new bankid.BankIdClient({
+    pfx: fs.readFileSync(P12_CERT_PATH),
+    passphrase: BANKID_CERT_PASSWORD,
+    production: false, // Use test environment
+    refreshInterval: 0, // Disable refresh interval
+  });
+  
+  console.log("BankID client initialized successfully");
 } catch (error) {
-  console.error("Failed to load P12 certificate:", error);
+  console.error("Failed to initialize BankID client:", error);
 }
-
-// Create a custom HTTPS agent with the BankID certificates
-// For test environments, we'll temporarily disable certificate verification
-// In production, this should be set to true with proper CA certificate configuration
-const agent = new https.Agent({
-  pfx: P12_CERT,
-  passphrase: BANKID_CERT_PASSWORD,
-  rejectUnauthorized: false
-});
-
-// Create axios instance for BankID API
-const bankidApi = axios.create({
-  baseURL: BANKID_API_URL,
-  httpsAgent: agent,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
 
 // Helper function to get client IP
 function getClientIp(req: Request): string {
@@ -62,48 +49,47 @@ export async function handleBankidAuth(req: Request, res: Response) {
     const sessionId = uuidv4();
     const endUserIp = getClientIp(req);
 
-    // Prepare request to BankID API
-    const authRequest: BankIDAuthRequest = {
-      personalNumber,
-      endUserIp,
-      requirement: {
-        allowFingerprint: true,
-      }
-    };
-
     console.log('Sending auth request to BankID API:', { personalNumber, endUserIp });
 
     // Make request to BankID API
-    const response = await bankidApi.post('/auth', authRequest);
-    console.log('BankID API auth response:', response.data);
+    const response = await bankidClient.authenticate({
+      personalNumber, 
+      endUserIp,
+      requirement: {
+        allowFingerprint: true
+      }
+    });
+    
+    console.log('BankID API auth response:', response);
     
     // Store the session with BankID information
     await storage.createBankidSession({
       status: 'pending',
       authMethod: authMethod || AUTH_METHODS.THIS_DEVICE,
       personalNumber: personalNumber || '',
-      orderRef: response.data.orderRef,
-      autoStartToken: response.data.autoStartToken,
-      qrStartToken: response.data.qrStartToken,
-      qrStartSecret: response.data.qrStartSecret,
+      orderRef: response.orderRef,
+      autoStartToken: response.autoStartToken,
+      qrStartToken: response.qrStartToken,
+      qrStartSecret: response.qrStartSecret,
     });
 
     // Return successful response to client
     return res.json({
       success: true,
       sessionId,
-      orderRef: response.data.orderRef,
-      autoStartToken: response.data.autoStartToken,
-      qrStartToken: response.data.qrStartToken,
-      qrStartSecret: response.data.qrStartSecret,
+      orderRef: response.orderRef,
+      autoStartToken: response.autoStartToken,
+      qrStartToken: response.qrStartToken,
+      qrStartSecret: response.qrStartSecret,
     });
   } catch (error: any) {
-    console.error('BankID Auth Error:', error.response?.data || error.message);
+    console.error('BankID Auth Error:', error.details || error.message);
     
     // Return error response to client
-    return res.status(error.response?.status || 500).json({
+    return res.status(error.httpStatus || 500).json({
       success: false,
-      message: error.response?.data?.details || 'Failed to authenticate with BankID',
+      message: error.details || 'Failed to authenticate with BankID',
+      errorCode: error.errorCode,
     });
   }
 }
@@ -130,34 +116,30 @@ export async function handleBankidCollect(req: Request, res: Response) {
       });
     }
 
-    // Make request to BankID to collect status
-    const collectRequest: BankIDCollectRequest = {
-      orderRef,
-    };
-
     console.log('Sending collect request to BankID API:', { orderRef });
-    const response = await bankidApi.post('/collect', collectRequest);
-    console.log('BankID API collect response:', response.data);
+    const response = await bankidClient.collect({ orderRef });
+    console.log('BankID API collect response:', response);
     
     // Update session status based on BankID response
-    if (response.data.status === 'complete') {
+    if (response.status === 'complete') {
       await storage.completeBankidSessionByOrderRef(orderRef);
     } else {
-      await storage.updateBankidSessionStatusByOrderRef(orderRef, response.data.status);
+      await storage.updateBankidSessionStatusByOrderRef(orderRef, response.status);
     }
 
     // Return the collect response to client
     return res.json({
       success: true,
-      ...response.data,
+      ...response,
     });
   } catch (error: any) {
-    console.error('BankID Collect Error:', error.response?.data || error.message);
+    console.error('BankID Collect Error:', error.details || error.message);
     
     // Return error response to client
-    return res.status(error.response?.status || 500).json({
+    return res.status(error.httpStatus || 500).json({
       success: false,
-      message: error.response?.data?.details || 'Failed to collect BankID status',
+      message: error.details || 'Failed to collect BankID status',
+      errorCode: error.errorCode,
     });
   }
 }
@@ -176,7 +158,7 @@ export async function handleBankidCancel(req: Request, res: Response) {
 
     // Make request to BankID to cancel the order
     console.log('Sending cancel request to BankID API:', { orderRef });
-    await bankidApi.post('/cancel', { orderRef });
+    await bankidClient.cancel({ orderRef });
     console.log('BankID API cancel successful');
     
     // Update our session
@@ -188,12 +170,13 @@ export async function handleBankidCancel(req: Request, res: Response) {
       message: 'BankID authentication cancelled',
     });
   } catch (error: any) {
-    console.error('BankID Cancel Error:', error.response?.data || error.message);
+    console.error('BankID Cancel Error:', error.details || error.message);
     
     // Return error response to client
-    return res.status(error.response?.status || 500).json({
+    return res.status(error.httpStatus || 500).json({
       success: false,
-      message: error.response?.data?.details || 'Failed to cancel BankID authentication',
+      message: error.details || 'Failed to cancel BankID authentication',
+      errorCode: error.errorCode,
     });
   }
 }
