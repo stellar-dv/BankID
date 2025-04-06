@@ -93,7 +93,7 @@ export default function Success({ onContinue, onRestart, orderRef, sessionId }: 
                   <ul className="mt-2 space-y-2 text-sm text-neutral-600">
                     <li className="flex">
                       <span className="w-32 flex-shrink-0 text-neutral-500">Name:</span>
-                      <span className="font-medium">Apotea AB (Demo)</span>
+                      <span className="font-medium">Test av BankID</span>
                     </li>
                     <li className="flex">
                       <span className="w-32 flex-shrink-0 text-neutral-500">Given Name:</span>
@@ -121,14 +121,14 @@ export default function Success({ onContinue, onRestart, orderRef, sessionId }: 
                     </li>
                     <li className="flex">
                       <span className="w-32 flex-shrink-0 text-neutral-500">Issuer:</span>
-                      <span className="font-medium">Apotea AB (Demo)</span>
+                      <span className="font-medium">Test av BankID</span>
                     </li>
                   </ul>
                 ) : (
                   <ul className="mt-2 space-y-2 text-sm text-neutral-600">
                     <li className="flex">
                       <span className="w-32 flex-shrink-0 text-neutral-500">Name:</span>
-                      <span className="font-medium">Apotea AB (Demo)</span>
+                      <span className="font-medium">Test av BankID</span>
                     </li>
                     <li className="flex">
                       <span className="w-32 flex-shrink-0 text-neutral-500">Time:</span>
@@ -148,7 +148,7 @@ export default function Success({ onContinue, onRestart, orderRef, sessionId }: 
                     </li>
                     <li className="flex">
                       <span className="w-32 flex-shrink-0 text-neutral-500">Issuer:</span>
-                      <span className="font-medium">Apotea AB (Demo)</span>
+                      <span className="font-medium">Test av BankID</span>
                     </li>
                   </ul>
                 )}
