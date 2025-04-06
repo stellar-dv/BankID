@@ -8,13 +8,15 @@ import { AUTH_METHODS } from '@shared/schema';
 
 // BankID configuration - Use the test environment URL
 const BANKID_API_URL = 'https://appapi2.test.bankid.com/rp/v6.0';
-const BANKID_CERT_PASSWORD = process.env.BANKID_CERT_PASSWORD || '';
+// Using the known password for our self-signed Apotea AB certificates
+const BANKID_CERT_PASSWORD = process.env.BANKID_CERT_PASSWORD || 'apotea';
 
 console.log("Connecting to BankID test API at:", BANKID_API_URL);
 
 // Read the certificate files
-const P12_CERT_PATH = path.resolve('./attached_assets/FPTestcert5_20240610.p12');
-const PEM_CERT_PATH = path.resolve('./attached_assets/FPTestcert5_20240610.pem');
+// Using Apotea AB certificates instead of the default test certificates
+const P12_CERT_PATH = path.resolve('./certs/apotea.p12');
+const PEM_CERT_PATH = path.resolve('./certs/apotea.pem');
 
 // Initialize BankID client
 let bankidClient: bankid.BankIdClient;
