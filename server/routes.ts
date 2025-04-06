@@ -12,7 +12,8 @@ import {
   handleBankidAuth, 
   handleBankidCollect, 
   handleBankidCancel, 
-  handleQrCode 
+  handleQrCode,
+  handleBankidSign
 } from "./bankid";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -166,6 +167,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Generate QR code for BankID
   app.post("/api/bankid/qrcode", handleQrCode);
+  
+  // Sign with BankID
+  app.post("/api/bankid/sign", handleBankidSign);
 
   return httpServer;
 }
