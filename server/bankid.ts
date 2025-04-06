@@ -14,31 +14,19 @@ import {
 // BankID configuration
 const BANKID_API_URL = process.env.BANKID_API_URL || 'https://appapi2.test.bankid.com/rp/v6.0';
 
-// Read BankID certificate files
-const CERT_PATH = process.env.BANKID_CERT || path.resolve('./attached_assets/FPTestcert5_20240610.pem');
-// The PEM file contains both certificate and private key (encrypted)
-const PEM_CONTENTS = fs.readFileSync(CERT_PATH, 'utf8');
+// Read the P12 certificate file (preferred format for BankID)
+const P12_CERT_PATH = process.env.BANKID_CERT || path.resolve('./attached_assets/FPTestcert5_20240610.p12');
+const P12_CERT = fs.readFileSync(P12_CERT_PATH);
 
-// For demo purposes, we're using a test certificate without a password
-// In a real environment, you'd need proper certificate management
-// Extract certificate and private key from PEM file
-const certMatches = PEM_CONTENTS.match(/-----BEGIN CERTIFICATE-----([\s\S]*?)-----END CERTIFICATE-----/);
-const keyMatches = PEM_CONTENTS.match(/-----BEGIN ENCRYPTED PRIVATE KEY-----([\s\S]*?)-----END ENCRYPTED PRIVATE KEY-----/);
-
-// Create certificate and key strings with proper headers and footers
-const certString = certMatches ? `-----BEGIN CERTIFICATE-----${certMatches[1]}-----END CERTIFICATE-----` : '';
-const keyString = keyMatches ? `-----BEGIN ENCRYPTED PRIVATE KEY-----${keyMatches[1]}-----END ENCRYPTED PRIVATE KEY-----` : '';
-
-console.log("Certificate and key loaded from PEM file");
+console.log("BankID P12 certificate loaded");
 
 // Create a custom HTTPS agent with the BankID certificates
+// According to BankID documentation, we need to provide our certificate and key
+// The P12 file format contains both in one file
 const agent = new https.Agent({
-  cert: certString,
-  key: {
-    key: keyString,
-    passphrase: ''  // The test certificate doesn't have a passphrase
-  },
-  rejectUnauthorized: false, // For demo purposes only - in production, set to true
+  pfx: P12_CERT,
+  passphrase: '', // The test certificate may not have a passphrase, but production would
+  rejectUnauthorized: false // For demo purposes only - in production, set to true
 });
 
 // Create axios instance for BankID API

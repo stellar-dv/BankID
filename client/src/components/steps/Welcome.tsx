@@ -13,7 +13,7 @@ export default function Welcome({ onStart }: WelcomeProps) {
       <CardContent className="p-8">
         <div className="text-center mb-6">
           <div className="mx-auto inline-flex">
-            <BankIDLogo width={64} height={64} />
+            <BankIDLogo width={64} height={64} color="#ffffff" />
           </div>
           <h1 className="text-2xl font-semibold text-white mt-4">BankID Authentication</h1>
           <p className="text-slate-300 mt-2">Welcome to the secure authentication demo</p>
