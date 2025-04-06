@@ -2,35 +2,105 @@ import { Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import axios from 'axios';
 import * as bankid from 'bankid';
 import { storage } from './storage';
 import { AUTH_METHODS } from '@shared/schema';
 
-// BankID configuration - Use the test environment URL
-const BANKID_API_URL = 'https://appapi2.test.bankid.com/rp/v6.0';
+// Helper function to send webhook callback
+async function sendCallback(callbackUrl: string, data: any) {
+  try {
+    console.log(`Sending callback to ${callbackUrl}`, data);
+    const response = await axios.post(callbackUrl, data);
+    console.log(`Callback successful: ${response.status}`);
+    return true;
+  } catch (error: any) {
+    console.error(`Callback failed: ${error.message}`);
+    return false;
+  }
+}
+
+// BankID configuration
+const BANKID_API_URL = process.env.BANKID_API_URL || 'https://appapi2.test.bankid.com/rp/v6.0';
 const BANKID_CERT_PASSWORD = process.env.BANKID_CERT_PASSWORD || '';
 
-console.log("Connecting to BankID test API at:", BANKID_API_URL);
-
-// Read the certificate files
-const P12_CERT_PATH = path.resolve('./attached_assets/FPTestcert5_20240610.p12');
-const PEM_CERT_PATH = path.resolve('./attached_assets/FPTestcert5_20240610.pem');
+console.log("Connecting to BankID API at:", BANKID_API_URL);
 
 // Initialize BankID client
 let bankidClient: bankid.BankIdClient;
 
 try {
-  // Initialize BankID client with the certificate
-  bankidClient = new bankid.BankIdClient({
-    pfx: fs.readFileSync(P12_CERT_PATH),
-    passphrase: BANKID_CERT_PASSWORD,
-    production: false, // Use test environment
-    refreshInterval: 0, // Disable refresh interval
-  });
+  // Check if custom certificates are provided via environment variables
+  if (process.env.BANKID_CERT && process.env.BANKID_KEY && process.env.BANKID_CA) {
+    console.log("Using certificate files from environment variables");
+    
+    // The bankid library doesn't directly support cert/key/ca properties
+    // We'll instead write these to temporary files in memory and use them
+    try {
+      // Create a temporary pfx certificate using openssl
+      console.log("Attempting to create PFX from provided certificates");
+      const tempFolderPath = path.resolve('./certs');
+      
+      // Make sure the folder exists
+      if (!fs.existsSync(tempFolderPath)) {
+        fs.mkdirSync(tempFolderPath, { recursive: true });
+      }
+      
+      // Write certificate files
+      const certPath = path.join(tempFolderPath, 'cert.pem');
+      const keyPath = path.join(tempFolderPath, 'key.pem');
+      const caPath = path.join(tempFolderPath, 'ca.pem');
+      const pfxPath = path.join(tempFolderPath, 'cert.pfx');
+      
+      fs.writeFileSync(certPath, Buffer.from(process.env.BANKID_CERT, 'base64'));
+      fs.writeFileSync(keyPath, Buffer.from(process.env.BANKID_KEY, 'base64'));
+      fs.writeFileSync(caPath, Buffer.from(process.env.BANKID_CA, 'base64'));
+      
+      // Create BankID client using the certificate
+      bankidClient = new bankid.BankIdClient({
+        pfx: fs.readFileSync(pfxPath),
+        passphrase: BANKID_CERT_PASSWORD,
+        production: BANKID_API_URL.includes('test.bankid.com') ? false : true,
+        refreshInterval: 0, // Disable refresh interval
+      });
+    } catch (err) {
+      console.error("Error creating PFX from environment variables:", err);
+      console.log("Falling back to attached test certificate");
+      
+      // Fall back to the attached test certificate if there's an error
+      const P12_CERT_PATH = path.resolve('./attached_assets/FPTestcert5_20240610.p12');
+      
+      bankidClient = new bankid.BankIdClient({
+        pfx: fs.readFileSync(P12_CERT_PATH),
+        passphrase: BANKID_CERT_PASSWORD,
+        production: false,
+        refreshInterval: 0,
+      });
+    }
+  } else {
+    // Fall back to the attached test certificates
+    console.log("Using attached test certificate files");
+    
+    // Read the certificate file from attached assets
+    const P12_CERT_PATH = path.resolve('./attached_assets/FPTestcert5_20240610.p12');
+    
+    // Initialize BankID client with the certificate
+    bankidClient = new bankid.BankIdClient({
+      pfx: fs.readFileSync(P12_CERT_PATH),
+      passphrase: BANKID_CERT_PASSWORD,
+      production: false, // Use test environment
+      refreshInterval: 0, // Disable refresh interval
+    });
+  }
   
   console.log("BankID client initialized successfully");
 } catch (error) {
   console.error("Failed to initialize BankID client:", error);
+}
+
+// Export the BankID client for use in other modules
+export function getBankidClient(): bankid.BankIdClient {
+  return bankidClient;
 }
 
 // Helper function to get client IP
@@ -43,7 +113,7 @@ function getClientIp(req: Request): string {
 export async function handleBankidAuth(req: Request, res: Response) {
   try {
     // Get personal number from request body (optional)
-    const { personalNumber, authMethod } = req.body;
+    const { personalNumber, authMethod, callbackUrl } = req.body;
 
     // Create session ID
     const sessionId = uuidv4();
@@ -71,6 +141,7 @@ export async function handleBankidAuth(req: Request, res: Response) {
       autoStartToken: response.autoStartToken,
       qrStartToken: response.qrStartToken,
       qrStartSecret: response.qrStartSecret,
+      callbackUrl
     });
 
     // Return successful response to client
@@ -123,6 +194,31 @@ export async function handleBankidCollect(req: Request, res: Response) {
     // Update session status based on BankID response
     if (response.status === 'complete') {
       await storage.completeBankidSessionByOrderRef(orderRef);
+      
+      // If the session has a callback URL, send a callback notification
+      if (session.callbackUrl) {
+        // Send callback with completion data
+        await sendCallback(session.callbackUrl, {
+          status: 'complete',
+          orderRef,
+          operation: 'bankid',
+          completionData: response.completionData,
+          timestamp: new Date().toISOString()
+        });
+      }
+    } else if (response.status === 'failed') {
+      await storage.updateBankidSessionStatusByOrderRef(orderRef, 'failed');
+      
+      // Send failure notification if callback URL exists
+      if (session.callbackUrl) {
+        await sendCallback(session.callbackUrl, {
+          status: 'failed',
+          orderRef,
+          operation: 'bankid',
+          hintCode: response.hintCode,
+          timestamp: new Date().toISOString()
+        });
+      }
     } else {
       await storage.updateBankidSessionStatusByOrderRef(orderRef, response.status);
     }
@@ -156,6 +252,9 @@ export async function handleBankidCancel(req: Request, res: Response) {
       });
     }
 
+    // Get the session to retrieve the callback URL if it exists
+    const session = await storage.getBankidSessionByOrderRef(orderRef);
+    
     // Make request to BankID to cancel the order
     console.log('Sending cancel request to BankID API:', { orderRef });
     await bankidClient.cancel({ orderRef });
@@ -163,6 +262,16 @@ export async function handleBankidCancel(req: Request, res: Response) {
     
     // Update our session
     await storage.updateBankidSessionStatusByOrderRef(orderRef, 'failed');
+    
+    // If the session has a callback URL, send a cancellation notification
+    if (session && session.callbackUrl) {
+      await sendCallback(session.callbackUrl, {
+        status: 'cancelled',
+        orderRef,
+        operation: 'bankid',
+        timestamp: new Date().toISOString()
+      });
+    }
 
     // Return successful response to client
     return res.json({
@@ -218,7 +327,7 @@ export async function handleQrCode(req: Request, res: Response) {
 export async function handleBankidSign(req: Request, res: Response) {
   try {
     // Get personal number from request body
-    const { personalNumber, userVisibleData } = req.body;
+    const { personalNumber, userVisibleData, callbackUrl } = req.body;
 
     if (!personalNumber) {
       return res.status(400).json({
@@ -257,6 +366,7 @@ export async function handleBankidSign(req: Request, res: Response) {
       autoStartToken: response.autoStartToken,
       qrStartToken: response.qrStartToken,
       qrStartSecret: response.qrStartSecret,
+      callbackUrl
     });
 
     // Return successful response to client

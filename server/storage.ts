@@ -66,6 +66,7 @@ export class MemStorage implements IStorage {
       autoStartToken: sessionData.autoStartToken || null,
       qrStartToken: sessionData.qrStartToken || null,
       qrStartSecret: sessionData.qrStartSecret || null,
+      callbackUrl: sessionData.callbackUrl || null,
       createdAt: now,
       completedAt: null
     };

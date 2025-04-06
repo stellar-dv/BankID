@@ -15,6 +15,12 @@ import {
   handleQrCode,
   handleBankidSign
 } from "./bankid";
+import {
+  handleWebhookAuth,
+  handleWebhookCollect,
+  handleWebhookCancel,
+  handleWebhookSign
+} from "./webhook";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Create HTTP server
@@ -170,6 +176,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Sign with BankID
   app.post("/api/bankid/sign", handleBankidSign);
+
+  // --- WEBHOOK API ROUTES ---
+  
+  // Webhook for BankID authentication
+  app.post("/api/webhook/bankid/auth", handleWebhookAuth);
+  
+  // Webhook for BankID signing
+  app.post("/api/webhook/bankid/sign", handleWebhookSign);
+  
+  // Webhook for BankID collect
+  app.post("/api/webhook/bankid/collect", handleWebhookCollect);
+  
+  // Webhook for BankID cancel
+  app.post("/api/webhook/bankid/cancel", handleWebhookCancel);
 
   return httpServer;
 }

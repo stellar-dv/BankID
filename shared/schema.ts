@@ -18,6 +18,7 @@ export const bankidSessions = pgTable("bankid_sessions", {
   autoStartToken: varchar("auto_start_token", { length: 255 }),
   qrStartToken: varchar("qr_start_token", { length: 255 }),
   qrStartSecret: varchar("qr_start_secret", { length: 255 }),
+  callbackUrl: varchar("callback_url", { length: 512 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   completedAt: timestamp("completed_at"),
 });
@@ -36,6 +37,7 @@ export const insertBankidSessionSchema = createInsertSchema(bankidSessions).pick
   autoStartToken: true,
   qrStartToken: true,
   qrStartSecret: true,
+  callbackUrl: true,
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;

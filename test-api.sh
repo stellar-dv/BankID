@@ -3,8 +3,9 @@
 # BankID API Test Script
 # This script demonstrates how to use the BankID API endpoints
 
-# API base URL
-BASE_URL="http://localhost:5000/api/bankid"
+# API base URLs
+DIRECT_URL="http://localhost:5000/api/bankid"
+WEBHOOK_URL="http://localhost:5000/api/webhook/bankid"
 
 # Test personal number - Use a valid format for the BankID test environment
 # For the BankID test environment, you can use any of the test personal numbers
