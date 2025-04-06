@@ -1,9 +1,9 @@
 import { Request, Response } from 'express';
+import { v4 as uuidv4 } from 'uuid';
 import axios from 'axios';
 import https from 'https';
 import fs from 'fs';
 import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
 import { storage } from './storage';
 import { 
   BankIDAuthRequest, 
@@ -13,20 +13,26 @@ import {
 
 // BankID configuration
 const BANKID_API_URL = process.env.BANKID_API_URL || 'https://appapi2.test.bankid.com/rp/v6.0';
+const BANKID_CERT_PASSWORD = process.env.BANKID_CERT_PASSWORD || '';
 
-// Read the P12 certificate file (preferred format for BankID)
-const P12_CERT_PATH = process.env.BANKID_CERT || path.resolve('./attached_assets/FPTestcert5_20240610.p12');
-const P12_CERT = fs.readFileSync(P12_CERT_PATH);
+console.log("Connecting to BankID test API at:", BANKID_API_URL);
 
-console.log("BankID P12 certificate loaded");
+// Read the P12 certificate file
+const P12_CERT_PATH = path.resolve('./attached_assets/FPTestcert5_20240610.p12');
+let P12_CERT;
+
+try {
+  P12_CERT = fs.readFileSync(P12_CERT_PATH);
+  console.log("BankID P12 certificate loaded successfully");
+} catch (error) {
+  console.error("Failed to load P12 certificate:", error);
+}
 
 // Create a custom HTTPS agent with the BankID certificates
-// According to BankID documentation, we need to provide our certificate and key
-// The P12 file format contains both in one file
 const agent = new https.Agent({
   pfx: P12_CERT,
-  passphrase: '', // The test certificate may not have a passphrase, but production would
-  rejectUnauthorized: false // For demo purposes only - in production, set to true
+  passphrase: BANKID_CERT_PASSWORD,
+  rejectUnauthorized: true
 });
 
 // Create axios instance for BankID API
@@ -48,9 +54,9 @@ function getClientIp(req: Request): string {
 export async function handleBankidAuth(req: Request, res: Response) {
   try {
     // Get personal number from request body (optional)
-    const { personalNumber } = req.body;
+    const { personalNumber, authMethod } = req.body;
 
-    // Create session in our database
+    // Create session ID
     const sessionId = uuidv4();
     const endUserIp = getClientIp(req);
 
@@ -63,13 +69,16 @@ export async function handleBankidAuth(req: Request, res: Response) {
       }
     };
 
-    // Make request to BankID
+    console.log('Sending auth request to BankID API:', { personalNumber, endUserIp });
+
+    // Make request to BankID API
     const response = await bankidApi.post('/auth', authRequest);
+    console.log('BankID API auth response:', response.data);
     
     // Store the session with BankID information
     await storage.createBankidSession({
       status: 'pending',
-      authMethod: AUTH_METHODS.THIS_DEVICE, // Default to THIS_DEVICE method
+      authMethod: authMethod || AUTH_METHODS.THIS_DEVICE,
       personalNumber: personalNumber || '',
       orderRef: response.data.orderRef,
       autoStartToken: response.data.autoStartToken,
@@ -109,15 +118,8 @@ export async function handleBankidCollect(req: Request, res: Response) {
       });
     }
 
-    // Make request to BankID to collect status
-    const collectRequest: BankIDCollectRequest = {
-      orderRef,
-    };
-
-    const response = await bankidApi.post('/collect', collectRequest);
-    
     // Get the session from our database
-    const session = await storage.getBankidSession(orderRef);
+    const session = await storage.getBankidSessionByOrderRef(orderRef);
     
     if (!session) {
       return res.status(404).json({
@@ -126,11 +128,20 @@ export async function handleBankidCollect(req: Request, res: Response) {
       });
     }
 
+    // Make request to BankID to collect status
+    const collectRequest: BankIDCollectRequest = {
+      orderRef,
+    };
+
+    console.log('Sending collect request to BankID API:', { orderRef });
+    const response = await bankidApi.post('/collect', collectRequest);
+    console.log('BankID API collect response:', response.data);
+    
     // Update session status based on BankID response
     if (response.data.status === 'complete') {
-      await storage.completeBankidSession(orderRef);
+      await storage.completeBankidSessionByOrderRef(orderRef);
     } else {
-      await storage.updateBankidSessionStatus(orderRef, response.data.status);
+      await storage.updateBankidSessionStatusByOrderRef(orderRef, response.data.status);
     }
 
     // Return the collect response to client
@@ -162,10 +173,12 @@ export async function handleBankidCancel(req: Request, res: Response) {
     }
 
     // Make request to BankID to cancel the order
+    console.log('Sending cancel request to BankID API:', { orderRef });
     await bankidApi.post('/cancel', { orderRef });
+    console.log('BankID API cancel successful');
     
     // Update our session
-    await storage.updateBankidSessionStatus(orderRef, 'failed');
+    await storage.updateBankidSessionStatusByOrderRef(orderRef, 'failed');
 
     // Return successful response to client
     return res.json({
