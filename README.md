@@ -19,7 +19,7 @@ POST /api/bankid/auth
 **Request Body:**
 ```json
 {
-  "personalNumber": "YYYYMMDD-XXXX",  // Swedish personal identity number
+  "personNummer": "YYYYMMDD-XXXX",  // Swedish personal identity number
   "endUserIp": "123.123.123.123",     // Optional, will use requestor IP if not provided
   "callbackUrl": "https://your-server.com/callback" // Optional callback URL
 }
@@ -46,7 +46,7 @@ POST /api/bankid/sign
 **Request Body:**
 ```json
 {
-  "personalNumber": "YYYYMMDD-XXXX",  // Swedish personal identity number
+  "personNummer": "YYYYMMDD-XXXX",  // Swedish personal identity number
   "userVisibleData": "Text to sign",   // Optional, will use default if not provided
   "endUserIp": "123.123.123.123",     // Optional, will use requestor IP if not provided
   "callbackUrl": "https://your-server.com/callback" // Optional callback URL
@@ -87,7 +87,7 @@ POST /api/bankid/collect
   "hintCode": "string",  // Optional, provides hints about the current state
   "completionData": {   // Only present when status is "complete"
     "user": {
-      "personalNumber": "string",
+      "personNummer": "string",
       "name": "string",
       "givenName": "string",
       "surname": "string"
@@ -160,7 +160,7 @@ POST /api/webhook/bankid/auth
 **Request Body:**
 ```json
 {
-  "personalNumber": "YYYYMMDD-XXXX",  // Swedish personal identity number
+  "personNummer": "YYYYMMDD-XXXX",  // Swedish personal identity number
   "callbackUrl": "https://your-server.com/callback" // Required: URL to receive status updates
 }
 ```
@@ -186,7 +186,7 @@ POST /api/webhook/bankid/sign
 **Request Body:**
 ```json
 {
-  "personalNumber": "YYYYMMDD-XXXX",  // Swedish personal identity number
+  "personNummer": "YYYYMMDD-XXXX",  // Swedish personal identity number
   "userVisibleData": "Text to sign",   // Optional, will use default if not provided
   "callbackUrl": "https://your-server.com/callback" // Required: URL to receive status updates
 }
@@ -216,7 +216,7 @@ When a BankID operation completes, fails, or is cancelled, a callback will be se
   "operation": "bankid",
   "completionData": {
     "user": {
-      "personalNumber": "string",
+      "personNummer": "string",
       "name": "string",
       "givenName": "string",
       "surname": "string"
@@ -266,7 +266,7 @@ Start a new signing request:
 curl -X POST http://localhost:5000/api/bankid/sign \
   -H "Content-Type: application/json" \
   -d '{
-    "personalNumber": "YYYYMMDD-XXXX",
+    "personNummer": "YYYYMMDD-XXXX",
     "userVisibleData": "This is a test signing request"
   }'
 ```
@@ -289,7 +289,7 @@ Start a new signing request with a callback:
 curl -X POST http://localhost:5000/api/webhook/bankid/sign \
   -H "Content-Type: application/json" \
   -d '{
-    "personalNumber": "YYYYMMDD-XXXX",
+    "personNummer": "YYYYMMDD-XXXX",
     "userVisibleData": "This is a test signing request",
     "callbackUrl": "https://your-server.com/bankid-callback"
   }'

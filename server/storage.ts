@@ -59,7 +59,7 @@ export class MemStorage implements IStorage {
     const session: BankidSession = {
       id,
       sessionId,
-      personalNumber: sessionData.personalNumber || null,
+      personNummer: sessionData.personNummer || null,
       authMethod: sessionData.authMethod,
       status: sessionData.status,
       orderRef: sessionData.orderRef || null,

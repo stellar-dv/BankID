@@ -9,7 +9,7 @@ import { ApiSession } from "@/lib/types";
 import { AuthMethod } from "@shared/schema";
 
 interface InitiateProps {
-  personalNumber: string;
+  personNummer: string;
   authMethod: AuthMethod;
   onBack: () => void;
   onSessionCreated: (session: ApiSession) => void;
@@ -17,7 +17,7 @@ interface InitiateProps {
 }
 
 export default function Initiate({
-  personalNumber,
+  personNummer,
   authMethod,
   onBack,
   onSessionCreated,
@@ -29,7 +29,7 @@ export default function Initiate({
     mutationFn: async () => {
       // Use the real BankID auth endpoint
       const res = await apiRequest("POST", "/api/bankid/auth", {
-        personalNumber: personalNumber.trim() || undefined
+        personNummer: personNummer.trim() || undefined
       });
       return res.json();
     },

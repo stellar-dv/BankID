@@ -113,17 +113,17 @@ function getClientIp(req: Request): string {
 export async function handleBankidAuth(req: Request, res: Response) {
   try {
     // Get personal number from request body (optional)
-    const { personalNumber, authMethod, callbackUrl } = req.body;
+    const { personNummer, authMethod, callbackUrl } = req.body;
 
     // Create session ID
     const sessionId = uuidv4();
     const endUserIp = getClientIp(req);
 
-    console.log('Sending auth request to BankID API:', { personalNumber, endUserIp });
+    console.log('Sending auth request to BankID API:', { personNummer, endUserIp });
 
     // Make request to BankID API
     const response = await bankidClient.authenticate({
-      personalNumber, 
+      personalNumber: personNummer, // BankID library uses personalNumber, but our API uses personNummer
       endUserIp,
       requirement: {
         allowFingerprint: true
@@ -136,7 +136,7 @@ export async function handleBankidAuth(req: Request, res: Response) {
     await storage.createBankidSession({
       status: 'pending',
       authMethod: authMethod || AUTH_METHODS.THIS_DEVICE,
-      personalNumber: personalNumber || '',
+      personNummer: personNummer || '',
       orderRef: response.orderRef,
       autoStartToken: response.autoStartToken,
       qrStartToken: response.qrStartToken,
@@ -327,12 +327,12 @@ export async function handleQrCode(req: Request, res: Response) {
 export async function handleBankidSign(req: Request, res: Response) {
   try {
     // Get personal number from request body
-    const { personalNumber, userVisibleData, callbackUrl } = req.body;
+    const { personNummer, userVisibleData, callbackUrl } = req.body;
 
-    if (!personalNumber) {
+    if (!personNummer) {
       return res.status(400).json({
         success: false,
-        message: 'personalNumber is required',
+        message: 'personNummer is required',
       });
     }
 
@@ -343,11 +343,11 @@ export async function handleBankidSign(req: Request, res: Response) {
     // Encode the user visible data in base64 format
     const encodedUserVisibleData = Buffer.from(userVisibleData || 'Test av BankID').toString('base64');
 
-    console.log('Sending sign request to BankID API:', { personalNumber, endUserIp });
+    console.log('Sending sign request to BankID API:', { personNummer, endUserIp });
 
     // Make request to BankID API
     const response = await bankidClient.sign({
-      personalNumber, 
+      personalNumber: personNummer, // BankID library uses personalNumber, but our API uses personNummer 
       endUserIp,
       userVisibleData: encodedUserVisibleData,
       requirement: {
@@ -361,7 +361,7 @@ export async function handleBankidSign(req: Request, res: Response) {
     await storage.createBankidSession({
       status: 'pending',
       authMethod: AUTH_METHODS.THIS_DEVICE,
-      personalNumber: personalNumber,
+      personNummer: personNummer,
       orderRef: response.orderRef,
       autoStartToken: response.autoStartToken,
       qrStartToken: response.qrStartToken,

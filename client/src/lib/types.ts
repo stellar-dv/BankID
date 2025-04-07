@@ -11,7 +11,7 @@ export interface ApiSession {
 
 // BankID API Types
 export interface BankIDAuthRequest {
-  personalNumber?: string;
+  personNummer?: string;
   endUserIp: string;
   requirement?: {
     cardReader?: string;
@@ -39,7 +39,7 @@ export interface BankIDCollectResponse {
   hintCode?: string;
   completionData?: {
     user: {
-      personalNumber: string;
+      personNummer: string;
       name: string;
       givenName: string;
       surname: string;

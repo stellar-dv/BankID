@@ -10,21 +10,23 @@ import { useToast } from "@/hooks/use-toast";
 import { AuthMethod, SessionStatus } from "@shared/schema";
 import { ApiSession } from "@/lib/types";
 
-export type BankIDStep = 
-  | "welcome" 
-  | "identification" 
-  | "initiate" 
-  | "qr" 
-  | "authentication" 
-  | "success" 
+export type BankIDStep =
+  | "welcome"
+  | "identification"
+  | "initiate"
+  | "qr"
+  | "authentication"
+  | "success"
   | "error";
 
 export default function BankIDFlow() {
   const [currentStep, setCurrentStep] = useState<BankIDStep>("welcome");
-  const [personalNumber, setPersonalNumber] = useState("");
+  const [personNummer, setPersonNummer] = useState("");
   const [authMethod, setAuthMethod] = useState<AuthMethod>("bankid-app");
   const [sessionData, setSessionData] = useState<ApiSession | null>(null);
-  const [activeOrderRef, setActiveOrderRef] = useState<string | undefined>(undefined);
+  const [activeOrderRef, setActiveOrderRef] = useState<string | undefined>(
+    undefined,
+  );
   const { toast } = useToast();
 
   const navigateTo = (step: BankIDStep) => {
@@ -33,13 +35,13 @@ export default function BankIDFlow() {
 
   const resetFlow = () => {
     setCurrentStep("welcome");
-    setPersonalNumber("");
+    setPersonNummer("");
     setSessionData(null);
     setActiveOrderRef(undefined);
   };
 
   const updateSessionData = (data: Partial<ApiSession>) => {
-    setSessionData(prev => {
+    setSessionData((prev) => {
       if (!prev) return data as ApiSession;
       return { ...prev, ...data };
     });
@@ -59,11 +61,11 @@ export default function BankIDFlow() {
       {currentStep === "welcome" && (
         <Welcome onStart={() => navigateTo("identification")} />
       )}
-      
+
       {currentStep === "identification" && (
-        <Identification 
-          personalNumber={personalNumber}
-          setPersonalNumber={setPersonalNumber}
+        <Identification
+          personNummer={personNummer}
+          setPersonNummer={setPersonNummer}
           authMethod={authMethod}
           setAuthMethod={setAuthMethod}
           onBack={() => navigateTo("welcome")}
@@ -76,10 +78,10 @@ export default function BankIDFlow() {
           }}
         />
       )}
-      
+
       {currentStep === "initiate" && (
-        <Initiate 
-          personalNumber={personalNumber}
+        <Initiate
+          personNummer={personNummer}
           authMethod={authMethod}
           onBack={() => navigateTo("identification")}
           onSessionCreated={(session) => {
@@ -93,10 +95,10 @@ export default function BankIDFlow() {
           onError={handleError}
         />
       )}
-      
+
       {currentStep === "qr" && (
-        <QrCode 
-          personalNumber={personalNumber}
+        <QrCode
+          personNummer={personNummer}
           onBack={() => navigateTo("identification")}
           onSessionCreated={(session) => {
             setSessionData(session);
@@ -110,9 +112,9 @@ export default function BankIDFlow() {
           onError={handleError}
         />
       )}
-      
+
       {currentStep === "authentication" && (
-        <Authentication 
+        <Authentication
           sessionId={sessionData?.sessionId || ""}
           orderRef={activeOrderRef}
           onCancel={() => navigateTo("identification")}
@@ -128,9 +130,9 @@ export default function BankIDFlow() {
           onSkipToError={() => navigateTo("error")}
         />
       )}
-      
+
       {currentStep === "success" && (
-        <Success 
+        <Success
           sessionId={sessionData?.sessionId}
           orderRef={activeOrderRef}
           onContinue={() => {
@@ -142,14 +144,15 @@ export default function BankIDFlow() {
           onRestart={resetFlow}
         />
       )}
-      
+
       {currentStep === "error" && (
-        <Error 
+        <Error
           onTryAgain={() => navigateTo("identification")}
           onNeedHelp={() => {
             toast({
               title: "Help",
-              description: "In a real application, this would open the help section.",
+              description:
+                "In a real application, this would open the help section.",
             });
           }}
         />

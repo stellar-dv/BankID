@@ -8,7 +8,7 @@ import { ApiSession } from "@/lib/types";
 import QRCode from "qrcode";
 
 interface QrCodeProps {
-  personalNumber: string;
+  personNummer: string;
   onBack: () => void;
   onSessionCreated: (session: ApiSession) => void;
   onSkip: () => void;
@@ -16,7 +16,7 @@ interface QrCodeProps {
 }
 
 export default function QrCode({
-  personalNumber,
+  personNummer,
   onBack,
   onSessionCreated,
   onSkip,
@@ -32,7 +32,7 @@ export default function QrCode({
     mutationFn: async () => {
       // Use the real BankID auth endpoint
       const res = await apiRequest("POST", "/api/bankid/auth", {
-        personalNumber: personalNumber.trim() || undefined
+        personNummer: personNummer.trim() || undefined
       });
       return res.json();
     },

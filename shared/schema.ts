@@ -11,7 +11,7 @@ export const users = pgTable("users", {
 export const bankidSessions = pgTable("bankid_sessions", {
   id: serial("id").primaryKey(),
   sessionId: varchar("session_id", { length: 36 }).notNull().unique(),
-  personalNumber: varchar("personal_number", { length: 13 }),
+  personNummer: varchar("person_nummer", { length: 13 }),
   authMethod: varchar("auth_method", { length: 20 }).notNull(),
   status: varchar("status", { length: 20 }).notNull(),
   orderRef: varchar("order_ref", { length: 255 }),
@@ -30,7 +30,7 @@ export const insertUserSchema = createInsertSchema(users).pick({
 
 export const insertBankidSessionSchema = createInsertSchema(bankidSessions).pick({
   sessionId: true,
-  personalNumber: true,
+  personNummer: true,
   authMethod: true,
   status: true,
   orderRef: true,
@@ -68,7 +68,7 @@ export type SessionStatus = typeof SESSION_STATUS[keyof typeof SESSION_STATUS];
 
 // BankID API Types
 export interface BankIDAuthRequest {
-  personalNumber?: string;
+  personNummer?: string;
   endUserIp: string;
   requirement?: {
     cardReader?: string;

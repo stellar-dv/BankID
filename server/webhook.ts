@@ -26,15 +26,15 @@ export async function handleWebhookSign(req: Request, res: Response) {
   try {
     // Get data from request body
     const { 
-      personalNumber, 
+      personNummer, 
       userVisibleData,
       callbackUrl
     } = req.body;
 
-    if (!personalNumber) {
+    if (!personNummer) {
       return res.status(400).json({
         success: false,
-        message: 'personalNumber is required',
+        message: 'personNummer is required',
       });
     }
 
@@ -47,14 +47,14 @@ export async function handleWebhookSign(req: Request, res: Response) {
     // Encode the user visible data in base64 format (required by BankID)
     const encodedUserVisibleData = Buffer.from(userVisibleData || 'Test av BankID').toString('base64');
 
-    console.log('Webhook: Sending sign request to BankID API:', { personalNumber, endUserIp });
+    console.log('Webhook: Sending sign request to BankID API:', { personNummer, endUserIp });
 
     // Get the BankID client
     const bankidClient = getBankidClient();
     
     // Make request to BankID API
     const response = await bankidClient.sign({
-      personalNumber, 
+      personalNumber: personNummer, // BankID library uses personalNumber, but our API uses personNummer
       endUserIp,
       userVisibleData: encodedUserVisibleData,
       requirement: {
@@ -68,7 +68,7 @@ export async function handleWebhookSign(req: Request, res: Response) {
     await storage.createBankidSession({
       status: 'pending',
       authMethod: AUTH_METHODS.THIS_DEVICE,
-      personalNumber: personalNumber,
+      personNummer: personNummer,
       orderRef: response.orderRef,
       autoStartToken: response.autoStartToken,
       qrStartToken: response.qrStartToken,
@@ -102,7 +102,7 @@ export async function handleWebhookAuth(req: Request, res: Response) {
   try {
     // Get data from request body
     const { 
-      personalNumber,
+      personNummer,
       callbackUrl
     } = req.body;
 
@@ -112,14 +112,14 @@ export async function handleWebhookAuth(req: Request, res: Response) {
     // Get client IP from request
     const endUserIp = req.ip || req.connection.remoteAddress || '127.0.0.1';
 
-    console.log('Webhook: Sending auth request to BankID API:', { personalNumber, endUserIp });
+    console.log('Webhook: Sending auth request to BankID API:', { personNummer, endUserIp });
 
     // Get the BankID client
     const bankidClient = getBankidClient();
     
     // Make request to BankID API
     const response = await bankidClient.authenticate({
-      personalNumber, 
+      personalNumber: personNummer, // BankID library uses personalNumber, but our API uses personNummer
       endUserIp,
       requirement: {
         allowFingerprint: true
@@ -132,7 +132,7 @@ export async function handleWebhookAuth(req: Request, res: Response) {
     await storage.createBankidSession({
       status: 'pending',
       authMethod: AUTH_METHODS.THIS_DEVICE,
-      personalNumber: personalNumber || '',
+      personNummer: personNummer || '',
       orderRef: response.orderRef,
       autoStartToken: response.autoStartToken,
       qrStartToken: response.qrStartToken,

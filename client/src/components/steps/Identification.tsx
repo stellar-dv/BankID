@@ -6,8 +6,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { AuthMethod } from "@shared/schema";
 
 interface IdentificationProps {
-  personalNumber: string;
-  setPersonalNumber: (value: string) => void;
+  personNummer: string;
+  setPersonNummer: (value: string) => void;
   authMethod: AuthMethod;
   setAuthMethod: (method: AuthMethod) => void;
   onBack: () => void;
@@ -15,8 +15,8 @@ interface IdentificationProps {
 }
 
 export default function Identification({
-  personalNumber,
-  setPersonalNumber,
+  personNummer,
+  setPersonNummer,
   authMethod,
   setAuthMethod,
   onBack,
@@ -39,18 +39,18 @@ export default function Identification({
         </div>
         
         <div className="mb-6">
-          <Label htmlFor="personalNumber" className="block text-sm font-medium text-neutral-700 mb-1">
+          <Label htmlFor="personNummer" className="block text-sm font-medium text-neutral-700 mb-1">
             Personal Identity Number
           </Label>
           <div className="relative rounded-md">
             <Input
               type="text"
-              id="personalNumber"
-              name="personalNumber"
+              id="personNummer"
+              name="personNummer"
               placeholder="YYYYMMDD-XXXX"
               className="block w-full px-4 py-3 border border-neutral-300"
-              value={personalNumber}
-              onChange={(e) => setPersonalNumber(e.target.value)}
+              value={personNummer}
+              onChange={(e) => setPersonNummer(e.target.value)}
             />
             <div className="absolute inset-y-0 right-0 flex items-center pr-3">
               <svg className="h-5 w-5 text-neutral-400" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
