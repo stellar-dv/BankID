@@ -44,7 +44,7 @@ mode = "sequential"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "npm run dev"
+args = "go run server/main.go"
 
 [[ports]]
 localPort = 5000
