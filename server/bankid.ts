@@ -6,16 +6,22 @@ import axios from 'axios';
 import * as bankid from 'bankid';
 import { storage } from './storage';
 import { AUTH_METHODS } from '@shared/schema';
+import logger from './logger';
+import { startAutoPolling, stopAutoPolling, isOrderBeingPolled } from './auto-poller';
+import crypto from 'crypto';
+
+// Enable fancy logging
+logger.enableFancyLogs();
 
 // Helper function to send webhook callback
 async function sendCallback(callbackUrl: string, data: any) {
   try {
-    console.log(`Sending callback to ${callbackUrl}`, data);
+    logger.log(`🚀 Sending callback to ${callbackUrl}`, 'webhook');
     const response = await axios.post(callbackUrl, data);
-    console.log(`Callback successful: ${response.status}`);
+    logger.log(`✅ Callback successful: ${response.status}`, 'webhook');
     return true;
   } catch (error: any) {
-    console.error(`Callback failed: ${error.message}`);
+    logger.error(`❌ Callback failed: ${error.message}`, 'webhook');
     return false;
   }
 }
@@ -24,7 +30,7 @@ async function sendCallback(callbackUrl: string, data: any) {
 const BANKID_API_URL = process.env.BANKID_API_URL || 'https://appapi2.test.bankid.com/rp/v6.0';
 const BANKID_CERT_PASSWORD = process.env.BANKID_CERT_PASSWORD || '';
 
-console.log("Connecting to BankID API at:", BANKID_API_URL);
+logger.log(`🏦 Connecting to BankID API at: ${BANKID_API_URL}`, 'bankid');
 
 // Initialize BankID client
 let bankidClient: bankid.BankIdClient;
@@ -32,13 +38,13 @@ let bankidClient: bankid.BankIdClient;
 try {
   // Check if custom certificates are provided via environment variables
   if (process.env.BANKID_CERT && process.env.BANKID_KEY && process.env.BANKID_CA) {
-    console.log("Using certificate files from environment variables");
+    logger.log("🔒 Using certificate files from environment variables", 'bankid');
     
     // The bankid library doesn't directly support cert/key/ca properties
     // We'll instead write these to temporary files in memory and use them
     try {
       // Create a temporary pfx certificate using openssl
-      console.log("Attempting to create PFX from provided certificates");
+      logger.log("🔐 Attempting to create PFX from provided certificates", 'bankid');
       const tempFolderPath = path.resolve('./certs');
       
       // Make sure the folder exists
@@ -64,8 +70,8 @@ try {
         refreshInterval: 0, // Disable refresh interval
       });
     } catch (err) {
-      console.error("Error creating PFX from environment variables:", err);
-      console.log("Falling back to attached test certificate");
+      logger.error("⚠️ Error creating PFX from environment variables: " + err, 'bankid');
+      logger.log("⚙️ Falling back to attached test certificate", 'bankid');
       
       // Fall back to the attached test certificate if there's an error
       const P12_CERT_PATH = path.resolve('./attached_assets/FPTestcert5_20240610.p12');
@@ -79,7 +85,7 @@ try {
     }
   } else {
     // Fall back to the attached test certificates
-    console.log("Using attached test certificate files");
+    logger.log("📄 Using attached test certificate files", 'bankid');
     
     // Read the certificate file from attached assets
     const P12_CERT_PATH = path.resolve('./attached_assets/FPTestcert5_20240610.p12');
@@ -93,9 +99,9 @@ try {
     });
   }
   
-  console.log("BankID client initialized successfully");
+  logger.log("✅ BankID client initialized successfully", 'bankid');
 } catch (error) {
-  console.error("Failed to initialize BankID client:", error);
+  logger.error(`🔥 Failed to initialize BankID client: ${error}`, 'bankid');
 }
 
 // Export the BankID client for use in other modules
@@ -113,13 +119,13 @@ function getClientIp(req: Request): string {
 export async function handleBankidAuth(req: Request, res: Response) {
   try {
     // Get personal number from request body (optional)
-    const { personNummer, authMethod, callbackUrl } = req.body;
+    const { personNummer, authMethod, callbackUrl, autoCollect } = req.body;
 
     // Create session ID
     const sessionId = uuidv4();
     const endUserIp = getClientIp(req);
 
-    console.log('Sending auth request to BankID API:', { personNummer, endUserIp });
+    logger.logBankIdEvent('auth', { personNummer, endUserIp });
 
     // Make request to BankID API
     const response = await bankidClient.authenticate({
@@ -130,7 +136,7 @@ export async function handleBankidAuth(req: Request, res: Response) {
       }
     });
     
-    console.log('BankID API auth response:', response);
+    logger.logBankIdEvent('auth', response);
     
     // Store the session with BankID information
     await storage.createBankidSession({
@@ -144,6 +150,15 @@ export async function handleBankidAuth(req: Request, res: Response) {
       callbackUrl
     });
 
+    // If autoCollect is true (which is the default), start auto polling
+    if (autoCollect !== false) {
+      // Check if auto polling is already active for this orderRef
+      if (!isOrderBeingPolled(response.orderRef)) {
+        logger.log(`🔄 Starting auto polling for auth orderRef: ${response.orderRef}`, 'bankid');
+        startAutoPolling(response.orderRef, 90000, 2000, sendCallback);
+      }
+    }
+
     // Return successful response to client
     return res.json({
       success: true,
@@ -152,9 +167,10 @@ export async function handleBankidAuth(req: Request, res: Response) {
       autoStartToken: response.autoStartToken,
       qrStartToken: response.qrStartToken,
       qrStartSecret: response.qrStartSecret,
+      autoCollect: autoCollect !== false, // Indicate if auto polling is enabled
     });
   } catch (error: any) {
-    console.error('BankID Auth Error:', error.details || error.message);
+    logger.error(`🔴 BankID Auth Error: ${error.details || error.message}`, 'bankid');
     
     // Return error response to client
     return res.status(error.httpStatus || 500).json({
@@ -181,19 +197,21 @@ export async function handleBankidCollect(req: Request, res: Response) {
     const session = await storage.getBankidSessionByOrderRef(orderRef);
     
     if (!session) {
+      logger.warn(`📛 Session not found for orderRef: ${orderRef}`, 'bankid');
       return res.status(404).json({
         success: false,
         message: 'Session not found',
       });
     }
 
-    console.log('Sending collect request to BankID API:', { orderRef });
+    logger.logBankIdEvent('collect', { orderRef });
     const response = await bankidClient.collect({ orderRef });
-    console.log('BankID API collect response:', response);
+    logger.logBankIdEvent('collect', response);
     
     // Update session status based on BankID response
     if (response.status === 'complete') {
       await storage.completeBankidSessionByOrderRef(orderRef);
+      logger.log(`✅ BankID session completed for orderRef: ${orderRef}`, 'bankid');
       
       // If the session has a callback URL, send a callback notification
       if (session.callbackUrl) {
@@ -208,6 +226,7 @@ export async function handleBankidCollect(req: Request, res: Response) {
       }
     } else if (response.status === 'failed') {
       await storage.updateBankidSessionStatusByOrderRef(orderRef, 'failed');
+      logger.warn(`❌ BankID session failed for orderRef: ${orderRef}, hint: ${response.hintCode}`, 'bankid');
       
       // Send failure notification if callback URL exists
       if (session.callbackUrl) {
@@ -221,6 +240,7 @@ export async function handleBankidCollect(req: Request, res: Response) {
       }
     } else {
       await storage.updateBankidSessionStatusByOrderRef(orderRef, response.status);
+      logger.log(`⏳ BankID session status ${response.status} for orderRef: ${orderRef}`, 'bankid');
     }
 
     // Return the collect response to client
@@ -229,7 +249,7 @@ export async function handleBankidCollect(req: Request, res: Response) {
       ...response,
     });
   } catch (error: any) {
-    console.error('BankID Collect Error:', error.details || error.message);
+    logger.error(`🔴 BankID Collect Error: ${error.details || error.message}`, 'bankid');
     
     // Return error response to client
     return res.status(error.httpStatus || 500).json({
@@ -252,13 +272,19 @@ export async function handleBankidCancel(req: Request, res: Response) {
       });
     }
 
+    // Stop auto polling for this orderRef if it's active
+    if (isOrderBeingPolled(orderRef)) {
+      stopAutoPolling(orderRef);
+      logger.log(`⏹️ Stopped auto polling for orderRef: ${orderRef}`, 'bankid');
+    }
+
     // Get the session to retrieve the callback URL if it exists
     const session = await storage.getBankidSessionByOrderRef(orderRef);
     
     // Make request to BankID to cancel the order
-    console.log('Sending cancel request to BankID API:', { orderRef });
+    logger.logBankIdEvent('cancel', { orderRef });
     await bankidClient.cancel({ orderRef });
-    console.log('BankID API cancel successful');
+    logger.log(`🛑 BankID authentication cancelled for orderRef: ${orderRef}`, 'bankid');
     
     // Update our session
     await storage.updateBankidSessionStatusByOrderRef(orderRef, 'failed');
@@ -279,7 +305,7 @@ export async function handleBankidCancel(req: Request, res: Response) {
       message: 'BankID authentication cancelled',
     });
   } catch (error: any) {
-    console.error('BankID Cancel Error:', error.details || error.message);
+    logger.error(`🔴 BankID Cancel Error: ${error.details || error.message}`, 'bankid');
     
     // Return error response to client
     return res.status(error.httpStatus || 500).json({
@@ -296,6 +322,7 @@ export async function handleQrCode(req: Request, res: Response) {
     const { orderRef, qrStartToken, qrStartSecret } = req.body;
 
     if (!orderRef || !qrStartToken || !qrStartSecret) {
+      logger.warn('🔍 Missing required parameters for QR code generation', 'bankid');
       return res.status(400).json({
         success: false,
         message: 'Missing required parameters',
@@ -307,13 +334,15 @@ export async function handleQrCode(req: Request, res: Response) {
     const time = Math.floor(Date.now() / 1000);
     const qrAuthCode = calculateAuthCode(qrStartToken, qrStartSecret, time);
     
+    logger.log(`🔄 Generated QR auth code for orderRef: ${orderRef} at time: ${time}`, 'bankid');
+    
     // Return the QR auth code to the client
     return res.json({
       success: true,
       qrAuthCode,
     });
   } catch (error: any) {
-    console.error('QR Code Error:', error.message);
+    logger.error(`🔴 QR Code Error: ${error.message}`, 'bankid');
     
     // Return error response to client
     return res.status(500).json({
@@ -327,7 +356,7 @@ export async function handleQrCode(req: Request, res: Response) {
 export async function handleBankidSign(req: Request, res: Response) {
   try {
     // Get personal number from request body
-    const { personNummer, userVisibleData, callbackUrl } = req.body;
+    const { personNummer, userVisibleData, callbackUrl, autoCollect } = req.body;
 
     if (!personNummer) {
       return res.status(400).json({
@@ -343,7 +372,7 @@ export async function handleBankidSign(req: Request, res: Response) {
     // Encode the user visible data in base64 format
     const encodedUserVisibleData = Buffer.from(userVisibleData || 'Test av BankID').toString('base64');
 
-    console.log('Sending sign request to BankID API:', { personNummer, endUserIp });
+    logger.logBankIdEvent('sign', { personNummer, endUserIp, userVisibleData: '(BASE64 encoded)' });
 
     // Make request to BankID API
     const response = await bankidClient.sign({
@@ -355,7 +384,7 @@ export async function handleBankidSign(req: Request, res: Response) {
       }
     });
     
-    console.log('BankID API sign response:', response);
+    logger.logBankIdEvent('sign', response);
     
     // Store the session with BankID information
     await storage.createBankidSession({
@@ -369,6 +398,15 @@ export async function handleBankidSign(req: Request, res: Response) {
       callbackUrl
     });
 
+    // If autoCollect is true (which is the default), start auto polling
+    if (autoCollect !== false) {
+      // Check if auto polling is already active for this orderRef
+      if (!isOrderBeingPolled(response.orderRef)) {
+        logger.log(`🔄 Starting auto polling for sign orderRef: ${response.orderRef}`, 'bankid');
+        startAutoPolling(response.orderRef, 90000, 2000, sendCallback);
+      }
+    }
+
     // Return successful response to client
     return res.json({
       success: true,
@@ -377,9 +415,10 @@ export async function handleBankidSign(req: Request, res: Response) {
       autoStartToken: response.autoStartToken,
       qrStartToken: response.qrStartToken,
       qrStartSecret: response.qrStartSecret,
+      autoCollect: autoCollect !== false, // Indicate if auto polling is enabled
     });
   } catch (error: any) {
-    console.error('BankID Sign Error:', error.details || error.message);
+    logger.error(`🔴 BankID Sign Error: ${error.details || error.message}`, 'bankid');
     
     // Return error response to client
     return res.status(error.httpStatus || 500).json({
@@ -392,7 +431,6 @@ export async function handleBankidSign(req: Request, res: Response) {
 
 // Helper function to calculate QR auth code based on BankID specification
 function calculateAuthCode(qrStartToken: string, qrStartSecret: string, time: number) {
-  const crypto = require('crypto');
   const hmac = crypto.createHmac('sha256', qrStartSecret);
   hmac.update(qrStartToken + time.toString());
   const hash = hmac.digest('hex');
