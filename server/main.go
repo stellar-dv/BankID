@@ -33,8 +33,6 @@ func main() {
 	router.HandleFunc("/api/bankid/cancel", handleBankIDCancel)
 	router.HandleFunc("/api/bankid/qrcode", handleQRCode)
 	router.HandleFunc("/api/bankid/sign", handleBankIDSign)
-
-	// Session management endpoints
 	router.HandleFunc("/api/bankid/init", handleBankIDInit)
 	router.HandleFunc("/api/bankid/status/", handleBankIDStatus)
 
@@ -121,8 +119,8 @@ func handleBankIDSign(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := APIResponse{
-		Success: true,
-		Message: "Sign initiated",
+		Success:  true,
+		Message:  "Sign initiated",
 		OrderRef: "mock-sign-order-ref",
 	}
 
