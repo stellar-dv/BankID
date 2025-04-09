@@ -8,7 +8,8 @@ import logger from './logger';
 
 // Import the bankidClient from bankid.ts
 import { getBankidClient } from './bankid';
-import { startAutoPolling, stopAutoPolling, isOrderBeingPolled } from './auto-poller';
+// Auto-polling functionality has been disabled
+// import { startAutoPolling, stopAutoPolling, isOrderBeingPolled } from './auto-poller';
 
 // Helper function to send webhook callback
 async function sendCallback(callbackUrl: string, data: any) {
@@ -79,11 +80,7 @@ export async function handleWebhookSign(req: Request, res: Response) {
       callbackUrl // Store the callback URL for later use
     });
 
-    // Always start auto polling for webhook endpoints
-    if (!isOrderBeingPolled(response.orderRef)) {
-      logger.log(`🔄 Webhook: Starting auto polling for sign orderRef: ${response.orderRef}`, 'webhook');
-      startAutoPolling(response.orderRef, 90000, 2000, sendCallback);
-    }
+    // Auto-polling has been disabled
 
     // Return successful response with webhook ID and BankID data
     return res.json({
@@ -93,7 +90,7 @@ export async function handleWebhookSign(req: Request, res: Response) {
       autoStartToken: response.autoStartToken,
       qrStartToken: response.qrStartToken,
       qrStartSecret: response.qrStartSecret,
-      autoPolling: true, // Indicate that auto polling is enabled
+      autoPolling: true
     });
   } catch (error: any) {
     logger.error(`🔴 Webhook: BankID Sign Error: ${error.details || error.message}`, 'webhook');
@@ -150,11 +147,7 @@ export async function handleWebhookAuth(req: Request, res: Response) {
       callbackUrl // Store the callback URL for later use
     });
 
-    // Always start auto polling for webhook endpoints
-    if (!isOrderBeingPolled(response.orderRef)) {
-      logger.log(`🔄 Webhook: Starting auto polling for auth orderRef: ${response.orderRef}`, 'webhook');
-      startAutoPolling(response.orderRef, 90000, 2000, sendCallback);
-    }
+    // Auto-polling has been disabled
 
     // Return successful response with webhook ID and BankID data
     return res.json({
@@ -163,8 +156,7 @@ export async function handleWebhookAuth(req: Request, res: Response) {
       orderRef: response.orderRef,
       autoStartToken: response.autoStartToken,
       qrStartToken: response.qrStartToken,
-      qrStartSecret: response.qrStartSecret,
-      autoPolling: true, // Indicate that auto polling is enabled
+      qrStartSecret: response.qrStartSecret
     });
   } catch (error: any) {
     logger.error(`🔴 Webhook: BankID Auth Error: ${error.details || error.message}`, 'webhook');
@@ -275,11 +267,8 @@ export async function handleWebhookCancel(req: Request, res: Response) {
       });
     }
 
-    // Stop auto polling for this orderRef if it's active
-    if (isOrderBeingPolled(orderRef)) {
-      stopAutoPolling(orderRef);
-      logger.log(`⏹️ Webhook: Stopped auto polling for orderRef: ${orderRef}`, 'webhook');
-    }
+    // Auto-polling has been disabled
+    logger.log(`⏹️ Webhook: Cancel operation for orderRef: ${orderRef}`, 'webhook');
 
     // Get the session to retrieve the callback URL if it exists
     const session = await storage.getBankidSessionByOrderRef(orderRef);

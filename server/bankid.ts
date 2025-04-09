@@ -7,7 +7,8 @@ import * as bankid from 'bankid';
 import { storage } from './storage';
 import { AUTH_METHODS } from '@shared/schema';
 import logger from './logger';
-import { startAutoPolling, stopAutoPolling, isOrderBeingPolled } from './auto-poller';
+// Auto-polling functionality has been disabled
+// import { startAutoPolling, stopAutoPolling, isOrderBeingPolled } from './auto-poller';
 import crypto from 'crypto';
 
 // Enable fancy logging
@@ -150,14 +151,7 @@ export async function handleBankidAuth(req: Request, res: Response) {
       callbackUrl
     });
 
-    // If autoCollect is true (which is the default), start auto polling
-    if (autoCollect !== false) {
-      // Check if auto polling is already active for this orderRef
-      if (!isOrderBeingPolled(response.orderRef)) {
-        logger.log(`🔄 Starting auto polling for auth orderRef: ${response.orderRef}`, 'bankid');
-        startAutoPolling(response.orderRef, 90000, 2000, sendCallback);
-      }
-    }
+    // Auto-polling has been disabled
 
     // Return successful response to client
     return res.json({
@@ -167,7 +161,7 @@ export async function handleBankidAuth(req: Request, res: Response) {
       autoStartToken: response.autoStartToken,
       qrStartToken: response.qrStartToken,
       qrStartSecret: response.qrStartSecret,
-      autoCollect: autoCollect !== false, // Indicate if auto polling is enabled
+      qrStartSecret: response.qrStartSecret
     });
   } catch (error: any) {
     logger.error(`🔴 BankID Auth Error: ${error.details || error.message}`, 'bankid');
@@ -272,11 +266,8 @@ export async function handleBankidCancel(req: Request, res: Response) {
       });
     }
 
-    // Stop auto polling for this orderRef if it's active
-    if (isOrderBeingPolled(orderRef)) {
-      stopAutoPolling(orderRef);
-      logger.log(`⏹️ Stopped auto polling for orderRef: ${orderRef}`, 'bankid');
-    }
+    // Auto-polling has been disabled
+    logger.log(`⏹️ Cancel operation for orderRef: ${orderRef}`, 'bankid');
 
     // Get the session to retrieve the callback URL if it exists
     const session = await storage.getBankidSessionByOrderRef(orderRef);
@@ -398,14 +389,7 @@ export async function handleBankidSign(req: Request, res: Response) {
       callbackUrl
     });
 
-    // If autoCollect is true (which is the default), start auto polling
-    if (autoCollect !== false) {
-      // Check if auto polling is already active for this orderRef
-      if (!isOrderBeingPolled(response.orderRef)) {
-        logger.log(`🔄 Starting auto polling for sign orderRef: ${response.orderRef}`, 'bankid');
-        startAutoPolling(response.orderRef, 90000, 2000, sendCallback);
-      }
-    }
+    // Auto-polling has been disabled
 
     // Return successful response to client
     return res.json({
@@ -415,7 +399,7 @@ export async function handleBankidSign(req: Request, res: Response) {
       autoStartToken: response.autoStartToken,
       qrStartToken: response.qrStartToken,
       qrStartSecret: response.qrStartSecret,
-      autoCollect: autoCollect !== false, // Indicate if auto polling is enabled
+      qrStartSecret: response.qrStartSecret
     });
   } catch (error: any) {
     logger.error(`🔴 BankID Sign Error: ${error.details || error.message}`, 'bankid');
