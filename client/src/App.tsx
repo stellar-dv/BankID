@@ -1,47 +1,32 @@
-import { Switch, Route, Link } from "wouter";
-import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
-import { Toaster } from "@/components/ui/toaster";
-import NotFound from "@/pages/not-found";
-import Home from "@/pages/Home";
-import ApiTest from "@/pages/ApiTest";
-import { Button } from "@/components/ui/button";
+import { RequestLogger } from './components/RequestLogger';
+import { Toaster } from './components/ui/toaster';
+import { ToastProvider } from './components/ui/toast';
+import { ThemeProvider } from './hooks/use-theme.tsx';
+import { ThemeToggle } from './components/features/ThemeToggle';
 
-function Navigation() {
+export default function App() {
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 bg-slate-900 p-2 flex justify-center space-x-4 shadow-md">
-      <Link href="/">
-        <Button variant="link">Home</Button>
-      </Link>
-      <Link href="/api-test">
-        <Button variant="link">API Test</Button>
-      </Link>
-    </div>
+    <ThemeProvider defaultTheme="dark" storageKey="bankid-ui-theme">
+      <ToastProvider>
+        <div className="min-h-screen bg-gradient-to-b from-gray-950 to-gray-900 text-white">
+          <header className="sticky top-0 z-50 border-b border-gray-800 bg-gray-900/50 backdrop-blur-sm">
+            <div className="container mx-auto flex h-16 items-center justify-between px-4">
+              <div className="flex items-center space-x-2">
+                <h1 className="text-xl font-bold">BankID Monitor</h1>
+              </div>
+              <div className="flex items-center space-x-4">
+                <ThemeToggle />
+              </div>
+            </div>
+          </header>
+          <main className="container mx-auto flex-1 p-4">
+            <div className="rounded-lg border border-gray-800 bg-gray-900/50 p-4">
+              <RequestLogger />
+            </div>
+          </main>
+          <Toaster />
+        </div>
+      </ToastProvider>
+    </ThemeProvider>
   );
 }
-
-function Router() {
-  return (
-    <>
-      <Navigation />
-      <div className="pt-14">
-        <Switch>
-          <Route path="/" component={Home} />
-          <Route path="/api-test" component={ApiTest} />
-          <Route component={NotFound} />
-        </Switch>
-      </div>
-    </>
-  );
-}
-
-function App() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <Router />
-      <Toaster />
-    </QueryClientProvider>
-  );
-}
-
-export default App;

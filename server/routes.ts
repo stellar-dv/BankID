@@ -25,15 +25,64 @@ import {
 // Import the wait-for-collect functionality
 import { waitForCollect } from "./wait-for-collect";
 
-// Custom response type for capturing responses
-interface CaptureResponse {
-  json: (data: any) => CaptureResponse;
-  status: (code: number) => CaptureResponse;
-}
+import express from 'express';
+import { EventEmitter } from 'events';
+
+const logEmitter = new EventEmitter();
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Create HTTP server
   const httpServer = createServer(app);
+
+  // Create an endpoint for SSE (Server-Sent Events)
+  app.get('/api/logs', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    const listener = (log: any) => {
+      res.write(`data: ${JSON.stringify(log)}\n\n`);
+    };
+
+    logEmitter.on('log', listener);
+
+    req.on('close', () => {
+      logEmitter.off('log', listener);
+    });
+  });
+
+  // Middleware to capture and emit logs
+  app.use((req, res: Response, next) => {
+    const start = Date.now();
+    const path = req.path;
+
+    res.on('finish', () => {
+      const duration = Date.now() - start;
+      const log = {
+        method: req.method,
+        path,
+        statusCode: res.statusCode,
+        duration,
+        timestamp: new Date().toISOString(),
+        response: (res as any).locals?.responseBody
+      };
+
+      if (path.startsWith('/api')) {
+        logEmitter.emit('log', log);
+      }
+    });
+
+    // Capture response body
+    const originalJson = res.json.bind(res);
+    res.json = function(body) {
+      (res as any).locals = (res as any).locals || {};
+      (res as any).locals.responseBody = body;
+      return originalJson(body);
+    };
+
+    next();
+  });
 
   // BankID API routes - Old demo routes (keeping for compatibility)
   app.post("/api/bankid/init", async (req, res) => {
@@ -195,12 +244,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let authResponse: any = null;
       
       // Create temporary response object to capture the auth response
-      const tempRes: CaptureResponse = {
+      const tempRes: Partial<Response> = {
         json: (data: any) => {
           authResponse = data;
-          return tempRes;
+          return tempRes as Response;
         },
-        status: (code: number) => tempRes
+        status: (code: number) => {
+          return tempRes as Response;
+        }
       };
       
       // Call the standard auth handler
@@ -250,12 +301,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let signResponse: any = null;
       
       // Create temporary response object to capture the sign response
-      const tempRes: CaptureResponse = {
+      const tempRes: Partial<Response> = {
         json: (data: any) => {
           signResponse = data;
-          return tempRes;
+          return tempRes as Response;
         },
-        status: (code: number) => tempRes
+        status: (code: number) => {
+          return tempRes as Response;
+        }
       };
       
       // Call the standard sign handler
@@ -319,12 +372,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let webhookResponse: any = null;
       
       // Create temporary response object to capture the webhook response
-      const tempRes: CaptureResponse = {
+      const tempRes: Partial<Response> = {
         json: (data: any) => {
           webhookResponse = data;
-          return tempRes;
+          return tempRes as Response;
         },
-        status: (code: number) => tempRes
+        status: (code: number) => {
+          return tempRes as Response;
+        }
       };
       
       // Call the standard webhook auth handler
@@ -364,12 +419,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let webhookResponse: any = null;
       
       // Create temporary response object to capture the webhook response
-      const tempRes: CaptureResponse = {
+      const tempRes: Partial<Response> = {
         json: (data: any) => {
           webhookResponse = data;
-          return tempRes;
+          return tempRes as Response;
         },
-        status: (code: number) => tempRes
+        status: (code: number) => {
+          return tempRes as Response;
+        }
       };
       
       // Call the standard webhook sign handler
